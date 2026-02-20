@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMCS Pi Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .card h2 {
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+            padding-bottom: 10px;
+        }
+
+        #video-stream {
+            width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .coordinate-display {
+            font-size: 3em;
+            text-align: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .servo-controls {
+            display: grid;
+            gap: 30px;
+        }
+
+        .servo-section {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .servo-section h3 {
+            margin-bottom: 15px;
+            color: #4fc3f7;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+            color: #b3e5fc;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4fc3f7;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4fc3f7;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .value-display {
+            text-align: center;
+            font-size: 1.2em;
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            border-radius: 5px;
+            margin-top: 8px;
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            text-transform: uppercase;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-stop {
+            background: #ef5350;
+            color: white;
+        }
+
+        .btn-stop:hover {
+            background: #d32f2f;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(239, 83, 80, 0.4);
+        }
+
+        .btn-preset {
+            background: #66bb6a;
+            color: white;
+        }
+
+        .btn-preset:hover {
+            background: #43a047;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 187, 106, 0.4);
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 0.9em;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .status.success {
+            background: rgba(76, 175, 80, 0.3);
+        }
+
+        .status.error {
+            background: rgba(244, 67, 54, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SMCS Pi in the Sky Dashboard</h1>
+
+        <div class="grid">
+            <!-- Video Stream Section -->
+            <div class="card">
+                <h2>Live Camera Feed</h2>
+                <img id="video-stream" src="/admin/stream.mjpeg" alt="Live Video Stream">
+            </div>
+
+            <!-- Brightest Pixel Coordinates -->
+            <div class="card">
+                <h2>Brightest Pixel Tracker</h2>
+                <div class="coordinate-display" id="coordinates">
+                    <div>X: <span id="coord-x">0</span></div>
+                    <div>Y: <span id="coord-y">0</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Servo Controls -->
+        <div class="card servo-controls">
+            <h2>Servo Motor Control</h2>
+
+            <!-- Servo 1 (GPIO17) -->
+            <div class="servo-section">
+                <h3>Servo 1 (GPIO 17)</h3>
+                <div class="control-group">
+                    <label for="servo1-slider">
+                        Pulse Width: 500us (CW Fast) ← 1500us (Stop) → 2500us (CCW Fast)
+                    </label>
+                    <input type="range" id="servo1-slider" min="500" max="2500" value="1500" step="10">
+                    <div class="value-display" id="servo1-value">1500 μs (STOP)</div>
+                </div>
+                <div class="button-group">
+                    <button class="btn-stop" onclick="stopServo('servo1')">⏹ Stop</button>
+                    <button class="btn-preset" onclick="setPreset('servo1', 1500)">Reset to Center</button>
+                </div>
+                <div class="status" id="servo1-status"></div>
+            </div>
+
+            <!-- Servo 2 (GPIO27) -->
+            <div class="servo-section">
+                <h3>Servo 2 (GPIO 27)</h3>
+                <div class="control-group">
+                    <label for="servo2-slider">
+                        Pulse Width: 500us (CW Fast) ← 1500us (Stop) → 2500us (CCW Fast)
+                    </label>
+                    <input type="range" id="servo2-slider" min="500" max="2500" value="1500" step="10">
+                    <div class="value-display" id="servo2-value">1500 μs (STOP)</div>
+                </div>
+                <div class="button-group">
+                    <button class="btn-stop" onclick="stopServo('servo2')">⏹ Stop</button>
+                    <button class="btn-preset" onclick="setPreset('servo2', 1500)">Reset to Center</button>
+                </div>
+                <div class="status" id="servo2-status"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Update brightest pixel coordinates
+        function updateCoordinates() {
+            fetch('/api/coordinate')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('coord-x').textContent = data.x;
+                    document.getElementById('coord-y').textContent = data.y;
+                })
+                .catch(error => console.error('Error fetching coordinates:', error));
+        }
+
+        // Update coordinates every 100ms
+        setInterval(updateCoordinates, 100);
+
+        // Servo control functions
+        function updateServoValue(servoId, value) {
+            const valueDisplay = document.getElementById(`${servoId}-value`);
+            let status = '';
+
+            if (value < 1450) {
+                status = 'CW';
+            } else if (value > 1550) {
+                status = 'CCW';
+            } else {
+                status = 'STOP';
+            }
+
+            valueDisplay.textContent = `${value} μs (${status})`;
+        }
+
+        function sendServoCommand(servoId, pulseWidth) {
+            fetch('/admin/servo/control', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    servo: servoId,
+                    pulse_width: pulseWidth
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const statusDiv = document.getElementById(`${servoId}-status`);
+                if (data.success) {
+                    statusDiv.textContent = `✓ Set to ${data.pulse_width}μs`;
+                    statusDiv.className = 'status success';
+                } else {
+                    statusDiv.textContent = `✗ Error: ${data.error}`;
+                    statusDiv.className = 'status error';
+                }
+                setTimeout(() => { statusDiv.textContent = ''; statusDiv.className = 'status'; }, 3000);
+            })
+            .catch(error => {
+                const statusDiv = document.getElementById(`${servoId}-status`);
+                statusDiv.textContent = `✗ Network error: ${error}`;
+                statusDiv.className = 'status error';
+            });
+        }
+
+        function stopServo(servoId) {
+            fetch('/admin/servo/stop', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    servo: servoId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const statusDiv = document.getElementById(`${servoId}-status`);
+                if (data.success) {
+                    statusDiv.textContent = '✓ Servo stopped';
+                    statusDiv.className = 'status success';
+                    document.getElementById(`${servoId}-slider`).value = 1500;
+                    updateServoValue(servoId, 1500);
+                } else {
+                    statusDiv.textContent = `✗ Error: ${data.error}`;
+                    statusDiv.className = 'status error';
+                }
+                setTimeout(() => { statusDiv.textContent = ''; statusDiv.className = 'status'; }, 3000);
+            })
+            .catch(error => {
+                const statusDiv = document.getElementById(`${servoId}-status`);
+                statusDiv.textContent = `✗ Network error: ${error}`;
+                statusDiv.className = 'status error';
+            });
+        }
+
+        function setPreset(servoId, value) {
+            document.getElementById(`${servoId}-slider`).value = value;
+            updateServoValue(servoId, value);
+            sendServoCommand(servoId, value);
+        }
+
+        // Set up servo sliders
+        ['servo1', 'servo2'].forEach(servoId => {
+            const slider = document.getElementById(`${servoId}-slider`);
+            let timeout;
+
+            slider.addEventListener('input', function() {
+                const value = parseInt(this.value);
+                updateServoValue(servoId, value);
+
+                // Debounce the servo commands
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    sendServoCommand(servoId, value);
+                }, 150);
+            });
+
+            // Initialize display
+            updateServoValue(servoId, 1500);
+        });
+
+        // Initial coordinate fetch
+        updateCoordinates();
+    </script>
+</body>
+</html>

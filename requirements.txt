@@ -1,0 +1,17 @@
+flask==3.0.0
+picamera2==0.3.17
+opencv-python==4.8.1.78
+numpy>=1.26.0
+python-dotenv==1.0.0
+pigpio==1.78
+pillow>=10.4.0
+
+# Note: picamera2, libcamera, and pigpio must be installed system-wide via apt
+
+# Old dependencies for legacy:
+# flask==3.0.0
+# python-dotenv==1.0.0
+# numpy==1.24.3
+# pillow==10.1.0
+
+# opencv-python removed - not needed for basic brightest pixel detection
