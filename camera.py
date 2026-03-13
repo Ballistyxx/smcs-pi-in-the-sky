@@ -5,35 +5,35 @@ Handles video streaming and brightest pixel detection
 """
 import io
 import time
+import threading
 import numpy as np
 from PIL import Image
 from picamera2 import Picamera2
-from threading import Lock
 
 
 class CameraManager:
     """Manages camera operations and image processing."""
 
     def __init__(self):
-        """Initialize the camera manager."""
         self.camera = None
-        self.lock = Lock()
-        self.latest_frame = None
+        self.condition = threading.Condition()
+        self.latest_jpeg = None       # encoded frame for all streaming clients
+        self.brightest = {'x': 0, 'y': 0}
         self.is_running = False
 
     def start(self):
-        """Start the camera."""
+        """Start the camera and background capture loop."""
         if self.is_running:
             return
 
         try:
             self.camera = Picamera2()
 
-            # Configure camera for video streaming
-            # Using 640x480 mode for better performance
+            # Full sensor resolution for maximum FOV (~15fps)
             config = self.camera.create_video_configuration(
-                main={"size": (640, 480), "format": "RGB888"},
-                controls={"FrameRate": 30}
+                main={"size": (1280, 720), "format": "BGR888"},
+                # main={"size": (2592, 1944), "format": "RGB888"},
+                controls={"FrameRate": 15}
             )
             self.camera.configure(config)
             self.camera.start()
@@ -42,77 +42,59 @@ class CameraManager:
             time.sleep(2)
             self.is_running = True
             print("Camera started successfully")
+
+            # Single background thread owns the camera and feeds all clients
+            thread = threading.Thread(target=self._capture_loop, daemon=True)
+            thread.start()
         except Exception as e:
             print(f"Error starting camera: {e}")
             raise
 
     def stop(self):
         """Stop the camera."""
-        if self.camera and self.is_running:
+        self.is_running = False
+        if self.camera:
             self.camera.stop()
-            self.is_running = False
             print("Camera stopped")
 
-    def get_frame(self):
+    def _capture_loop(self):
         """
-        Capture a frame and return it as JPEG bytes.
-
-        Returns:
-            bytes: JPEG encoded frame
+        Background thread: captures frames, encodes them once, detects
+        brightest pixel, then wakes all waiting stream clients.
         """
-        if not self.is_running:
-            return None
-
-        try:
-            with self.lock:
-                # Capture frame as numpy array
+        while self.is_running:
+            try:
                 frame = self.camera.capture_array()
 
-                # Store for brightest pixel detection
-                self.latest_frame = frame.copy()
-
-                # Convert to PIL Image
-                image = Image.fromarray(frame)
-
-                # Encode as JPEG
+                # Encode to JPEG once for all clients
                 buffer = io.BytesIO()
-                image.save(buffer, format='JPEG', quality=85)
-                return buffer.getvalue()
-        except Exception as e:
-            print(f"Error capturing frame: {e}")
-            return None
+                Image.fromarray(frame).save(buffer, format='JPEG', quality=85)
+                jpeg = buffer.getvalue()
+
+                # Brightest pixel detection
+                gray = np.mean(frame, axis=2)
+                y, x = np.unravel_index(np.argmax(gray), gray.shape)
+
+                # Publish to all waiting clients atomically
+                with self.condition:
+                    self.latest_jpeg = jpeg
+                    self.brightest = {'x': int(x), 'y': int(y)}
+                    self.condition.notify_all()
+
+            except Exception as e:
+                print(f"Capture error: {e}")
+
+    def get_jpeg_frame(self):
+        """
+        Block until the next frame is ready, then return it.
+        Each call to this from different threads returns the same frame
+        simultaneously — no redundant camera reads.
+        """
+        with self.condition:
+            self.condition.wait(timeout=5)
+            return self.latest_jpeg
 
     def get_brightest_pixel(self):
-        """
-        Find the brightest pixel in the current frame.
-
-        Returns:
-            dict: {'x': int, 'y': int} coordinates of brightest pixel
-        """
-        if self.latest_frame is None:
-            return {'x': 0, 'y': 0}
-
-        try:
-            with self.lock:
-                frame = self.latest_frame.copy()
-
-            # Convert RGB to grayscale (simple average method)
-            # This gives us brightness values
-            if len(frame.shape) == 3:
-                # RGB frame - calculate brightness
-                gray = np.mean(frame, axis=2)
-            else:
-                # Already grayscale
-                gray = frame
-
-            # Find the coordinates of the maximum value
-            max_idx = np.argmax(gray)
-            y, x = np.unravel_index(max_idx, gray.shape)
-
-            return {
-                'x': int(x),
-                'y': int(y)
-            }
-        except Exception as e:
-            print(f"Error detecting brightest pixel: {e}")
-            return {'x': 0, 'y': 0}
+        """Return the brightest pixel coordinates from the latest frame."""
+        with self.condition:
+            return self.brightest.copy()

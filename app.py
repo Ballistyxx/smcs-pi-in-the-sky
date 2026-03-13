@@ -4,11 +4,8 @@ SMCS Pi in the Sky - Main Flask Application
 Raspberry Pi 4 camera streaming with servo control
 """
 import os
-import io
-import time
 from functools import wraps
-from threading import Lock
-from flask import Flask, Response, render_template, request, jsonify, session
+from flask import Flask, Response, render_template, request, jsonify
 from dotenv import load_dotenv
 from camera import CameraManager
 from servo_control import ServoController
@@ -17,7 +14,7 @@ from servo_control import ServoController
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)  # Random secret key for sessions
+app.secret_key = os.urandom(24)
 
 # Configuration from .env
 ADMIN_USERNAME = os.getenv('ADMIN_USERNAME')
@@ -33,10 +30,6 @@ if not ADMIN_USERNAME or not ADMIN_PASSWORD:
 # Initialize camera and servo controller
 camera_manager = CameraManager()
 servo_controller = ServoController()
-
-# Lock for thread safety
-coordinate_lock = Lock()
-latest_coordinate = {'x': 0, 'y': 0}
 
 
 def check_auth(username, password):
@@ -60,38 +53,25 @@ def requires_auth(f):
 
 
 def generate_frames():
-    """Generator function to stream video frames."""
+    """Generator function to stream video frames to a single client.
+    Blocks on each iteration until the broadcaster has a new frame ready."""
     while True:
-        frame_data = camera_manager.get_frame()
-        if frame_data:
+        frame = camera_manager.get_jpeg_frame()
+        if frame:
             yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_data + b'\r\n')
-        time.sleep(0.033)  # ~30 fps
-
-
-def update_brightest_pixel():
-    """Background task to continuously update brightest pixel coordinate."""
-    global latest_coordinate
-    while True:
-        coord = camera_manager.get_brightest_pixel()
-        if coord:
-            with coordinate_lock:
-                latest_coordinate = coord
-        time.sleep(0.05)  # Update at ~20Hz
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
 
 # Public API endpoint - no authentication required
 @app.route('/api/coordinate', methods=['GET'])
 def get_coordinate():
     """Return the coordinates of the brightest pixel."""
-    with coordinate_lock:
-        return jsonify(latest_coordinate)
+    return jsonify(camera_manager.get_brightest_pixel())
 
 
-# Admin endpoints - authentication required
+# Public stream endpoints - no authentication required
 @app.route('/admin/stream')
 @app.route('/admin/stream.mjpeg')
-@requires_auth
 def video_stream():
     """Video streaming route."""
     return Response(
@@ -180,15 +160,7 @@ def index():
 
 
 if __name__ == '__main__':
-    # Start camera
     camera_manager.start()
-
-    # Start coordinate update thread
-    import threading
-    coord_thread = threading.Thread(target=update_brightest_pixel, daemon=True)
-    coord_thread.start()
-
-    # Run Flask app
     try:
         app.run(host='0.0.0.0', port=5000, threaded=True)
     finally:

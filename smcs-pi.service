@@ -1,0 +1,15 @@
+[Unit]
+Description=SMCS Pi in the Sky
+After=network.target pigpiod.service
+Requires=pigpiod.service
+
+[Service]
+Type=simple
+User=smcspi
+WorkingDirectory=/home/smcspi/smcs-pi-in-the-sky
+ExecStart=/home/smcspi/smcs-pi-in-the-sky/venv/bin/python3 app.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
