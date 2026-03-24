@@ -134,6 +134,8 @@ The SM-S4303R servos are continuous rotation servos:
 - **> 1500 μs**: Counter-clockwise rotation (speed increases as value increases)
 - **Range**: 500-2500 microseconds
 
+Experimentally, the best settings for the servos are 1030μs (Servo 1), and 1520μs (Servo 2).
+
 ## Project Structure
 
 ```
